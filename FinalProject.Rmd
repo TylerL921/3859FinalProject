@@ -1,0 +1,211 @@
+---
+title: "SS3859 Final Project"
+author: "Tyler Lin"
+date: "12/08/2023"
+output:
+  html_document:
+    df_print: paged
+---
+
+# **Introduction**
+
+### Motivation
+
+A general manager for the NBA has such a difficult job. They have to compete against other GM's to construct a team good enough to win everything. The obvious answer would be to sign the best players in the world, however that's just not a viable solution due to budgets, salary caps, luxury tax, etc. So what is a good way to determine the value of a player? How do we make sure we don't overpay to optimize our roster building?
+
+I will attempt to determine a players value from a pure statistical perspective. After my analysis, I should be able to predict a players salary given their stat line. With this prediction, I also would be able to determine which players are over/underrated compared to how much they get paid.
+
+
+### Data Introduction
+
+All data was retrieve from: [NBA Player Salaries](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season?select=nba_2022-23_all_stats_with_salary.csv) 
+
+Notable Variables:
+
+Response Variable: Salary (This is the value we want to predict by the end)
+
+Excluded Variables: These variables I have chosen to leave out for simplicity:
+
+* Player Name
+* Teams
+
+Some variables have an overlap with others. Below I have provided a description of all the variables, and why I have/haven't included them in my analysis.
+[Full List Of Variables](https://docs.google.com/document/d/178A2UeYJJhzocjRaNXQU9IXSAzRg-9vEtHH62ep-XTI/edit?usp=sharing)
+
+### Data Visualization
+```{r}
+# Libraries
+library(readxl)
+
+# Extract Data
+full <- read.csv("nba_2022-23_all_stats_with_salary.csv", check.names = FALSE)
+include <- read_excel("NBA Stats Variable Decisions.xlsx")
+
+# Clean Up Data
+include <- include[which(include$Decision == "Included"),]$Variable
+data <- subset(full, select = include)
+data$Position <- ifelse(grepl("-", data$Position), "M", data$Position)
+data <- na.omit(data)
+
+# Summarize continuous variables
+noCat = data[,!(names(data) %in% c("Position"))]
+summary(noCat)
+
+```
+[Graphs of all the variables](https://drive.google.com/file/d/1td4PX_DyyQfypFztv3a7dFHQLoahbgjm/view?usp=drive_link)
+
+# **Regression Model Creation**
+### **Win Shares**
+As stated in my variable description, all of the win shares variables feel significant. But they also seem very related. So, to be proactive in preventing multicollinearity I will test them against each other.
+
+```{r}
+# Libraries
+library(faraway)
+
+# Create Model and summary to test theory
+lm_WS <- lm(formula = Salary ~ ., data = data[,c(1, 21:24)])
+summary(lm_WS)
+
+```
+
+As we can see from the summary, this model does contain significant estimators, but together none of them are significant, thus a high correlation. For simplicity let's choose between WS and WS/48 as they both consider offensive and defensive win shares. In this case I choose WS/48.
+
+### **Box Plus Minutes**
+
+Similar to win shares, all of the BPM variables seem significant, but highly related. So, using VIF I will test to see if there is any collinearity.
+
+```{r}
+
+lm_BPM <- lm(formula = Salary ~ ., data = data[,c(1, 25:27)])
+vif(lm_BPM)
+```
+
+These VIF's are extremely large, thus these variables are highly related. So once again for simplicity, I will take the all around variable BPM over the offensive/defensive BPM.
+
+```{r}
+# First model reduction
+data <- data[, !names(data) %in% c("OWS", "DWS", "WS", "OBPM", "DBPM")]
+```
+
+### **Check Assumptions**
+
+Before reducing the model further, lets check all of the assumptions needed for a linear regression model.
+
+```{r}
+# Libraries
+library(lmtest)
+
+lm_full <- lm(Salary ~ . , data = data)
+
+par(mfrow=c(1,2))
+plot(fitted(lm_full), resid(lm_full), col = "grey", pch = 20, cex = 2)
+abline(h=0, col = "red3", lwd = 2)
+
+qqnorm(resid(lm_full), col = "grey", pch = 20, cex = 2)
+qqline(resid(lm_full), col = "royalblue", lwd = 2 )
+
+bptest(lm_full)
+shapiro.test(resid(lm_full))
+
+```
+
+* Residual plot has roughly and equal amount of points above/below 0. Thus we can assume the linearity assumption is not violated.
+* Both the SW test and the QQ plot suggest the normality assumption is violated.
+* The BP test and the residual plots suggest the equal variance assumption is violated.
+
+To fix the model I will try box cox transformations.
+
+```{r}
+library(MASS)
+
+boxcox(lm_full, lambda = seq(-0.5,0.5, by = 0.1))
+lambda <- 0.25
+
+lm_cx <- lm(((Salary^(lambda)-1)/(lambda)) ~ ., data = data)
+
+
+par(mfrow=c(1,2))
+plot(fitted(lm_cx), resid(lm_cx), col = "grey", pch = 20, cex = 2)
+abline(h=0, col = "red3", lwd = 2)
+
+qqnorm(resid(lm_cx), col = "grey", pch = 20, cex = 2)
+qqline(resid(lm_cx), col = "royalblue", lwd = 2 )
+
+bptest(lm_cx)
+shapiro.test(resid(lm_cx))
+
+```
+
+This new model fixes the normality assumption, and greatly improves the equal variance assumption.
+
+Note: The graph suggest that the equal variance assumption is still violated. But for the purpose of this assignment, this model is sufficient (Approved by Professor).
+
+### **Reducing The Model **
+Due to how many variables I have to consider I choose to use BIC. This way I can punish complex models more.
+
+```{r}
+n <- nrow(data)
+lm_cx_bic <- step(lm_full, direction = "both", k = log(n), trace = FALSE)
+
+```
+# **Analysis**
+Now that our model is completed we can do some analysis and predictions on current players.
+
+### **Significant Predictors**
+```{r}
+summary(lm_cx_bic)
+```
+
+Therefore the best model for determining the salary of a player contains...
+
+* Age
+* 3 Point Percentage
+* Average Points Per Game
+* Value Over Replacement Player
+* Win Shares per 48 min
+
+**Why These Variables?**
+
+Age: Younger players would have less longevity in the league, and thus they haven't yet proven themselves, leading to lower salaries compared to a seasoned player.
+
+Average Points Per Game and 3 Point Percentage: Both variables are good metrics of their offensive capabilities. So having a better stat line would suggest you are a better player offensively, thus a higher salary is justified.
+
+Value Over Replacement Player: Simply put, if you are more valuble than your replacement, you deserve a bigger contract.
+
+Win Shares Per 48 Min: Shows the level of contribution a player has for the team, thus the higher this is the higher your salary should be.
+
+**Surprising Missing Variables**
+
+Usage Percentage: The more a player is used, should justify a higher salary and vise versa. But I do suppose this is covered by VORP
+
+Player Efficiency Rating: I thought this variable would be favored over points per game, as you would get more points if you had more possessions, vs your level of efficiency not being dependent on the amount of possessions.
+
+### **Predicting Player Salaries**
+
+Let's look at the controversial signing of Fred VanVleet this off season. Many basketball fans say his contract is way too high, but lets see what my regression model predicts his salary at compared to what he is earning.
+
+2023-2024 Stats Found [here](https://www.basketball-reference.com/leagues/NBA_2024_advanced.html)
+
+
+```{r}
+# Bug Fix (Recreate Model With Better Col Names)
+colnames(data) <- make.names(colnames(data))
+lm_final <- lm(formula = Salary ~ Age + X3P. + PTS + VORP + WS.48, data = data)
+
+# Fred VanVleet's 2023-2024 Offseason Stats
+fredVV <- data.frame(Age = 29, X3P. = 0.342, PTS = 19.3, VORP = 2.9, WS.48 = 0.123)
+
+# Predict His Salary
+predict(lm_final, fredVV, interval = "predict")
+
+```
+
+Therefore, from my regression models point of view (95% significance), Fred Vanvleet was worth between 12.2 and 37.1 million dollars a year at the time of signing his current 42.6 million dollar (per year) contract. So, does this suggest that the Houston Rockets overpaid him? Not necessarily. In the next section I will highlight some downfalls to my statistical approach.
+
+### **Limitations**
+
+Although I am quite satisfied with my current regression model, it is by no means perfect. This is due to all of the unquantifiable factors that affect how much a player's salary is worth. Some of the biggest ones being, Off Court Value, Fan Bias, and Team Interests. 
+
+* A player like Fred has a veteran presence that could help guide young and upcoming stars. Thus, inflating his value for a young team like Houston.
+* Superstars and fan favorites are likely to get a more generous contract to keep them around and keep fans happy.
+* GM's have to keep in mind they aren't the only one offering to sign a player. They have to outbid every other team.

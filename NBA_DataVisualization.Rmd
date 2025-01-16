@@ -1,0 +1,84 @@
+---
+title: "NBA Data Visualization"
+author: "Tyler Lin"
+date: "12/08/2023"
+output:
+  html_document:
+    df_print: paged
+---
+
+All data was retrieve from: [NBA Player Salaries](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season?select=nba_2022-23_all_stats_with_salary.csv) 
+
+[Full List Of Variables](https://docs.google.com/document/d/178A2UeYJJhzocjRaNXQU9IXSAzRg-9vEtHH62ep-XTI/edit?usp=sharing)
+
+```{r}
+# Libraries
+library(readxl)
+
+# Extract Data
+full <- read.csv("nba_2022-23_all_stats_with_salary.csv", check.names = FALSE)
+include <- read_excel("NBA Stats Variable Decisions.xlsx")
+
+# Clean Up Data
+include <- include[which(include$Decision == "Included"),]$Variable
+data <- subset(full, select = include)
+data$Position <- ifelse(grepl("-", data$Position), "M", data$Position)
+data <- na.omit(data)
+
+# Graph Data
+hist(data$Salary/1000000, ylim = c(0, 250), xlab = "Yearly Salary (Millions)", main = "Histogram of NBA Players Yearly Salary")
+
+barplot(table(data$Position), ylim = c(0, 120), ylab = "Number of Players", xlab = "Position", main = "NBA Position Distribution")
+
+hist(data$Age, ylim = c(0, 100), xlim = c(18, 45), xlab = "Age", main = "Histogram of NBA Player Age")
+
+hist(data$GP, ylim = c(0, 100), xlim = c(0, 90), xlab = "Number of Games Played In 2023 Season", main = "Histogram of Number of Games Played")
+
+hist(data$GS, ylim = c(0, 250), xlim = c(0, 90), xlab = "Number of Games Started In 2023 Season", main = "Histogram of Number of Games Started")
+
+hist(data$MP, ylim = c(0, 100), xlab = "Average Number of Minutes Played Per Game", main = "Histogram of Minuites Played Per Game")
+
+hist(data$`3P%`, xlab = "3 Point Percentage", main = "Histogram of 3P%")
+
+hist(data$`2P%`, xlab = "2 Point Percentage", main = "Histogram of 2P%")
+
+hist(data$`eFG%`, ylim = c(0, 130), xlab = "Effective Field Goal Percentage", main = "Histogram of eFG%")
+
+hist(data$`FT%`, xlab = "Free Throw Percentage", main = "Histogram of FT%")
+
+hist(data$TRB, xlab = "Average Rebounds Per Game", main = "Histogram of Rebounding in the NBA")
+
+hist(data$AST, xlab = "Average Assists Per Game", main = "Histogram of Assists in the NBA")
+
+hist(data$STL, xlab = "Average Steals Per Game", main = "Histogram of Steals in the NBA")
+
+hist(data$BLK, xlab = "Average Blocks Per Game", main = "Histogram of Blocks in the NBA")
+
+hist(data$TOV, xlab = "Average Turnovers Per Game", main = "Histogram of Turnovers in the NBA")
+
+hist(data$PF, xlab = "Average Fouls Per Game", main = "Histogram of Fouls in the NBA")
+
+hist(data$PTS, xlab = "Average Points Per Game", main = "Histogram of Points in the NBA")
+
+hist(data$PER, xlab = "Player Efficency Rating", main = "Histogram of PER")
+
+hist(data$`TS%`, xlab = "True Shooting Percentage", main = "Histogram of TS%")
+
+hist(data$`USG%`, xlab = "Useage Percentage", main = "Histogram of USG%")
+
+hist(data$WS, xlab = "Win Shares", main = "Histogram of Win Shares in the NBA")
+
+hist(data$OWS, xlab = "Offensive Win Shares", main = "Histogram of Offensive Win Shares in the NBA")
+
+hist(data$DWS, xlab = "Defensive Win Shares", main = "Histogram of Deffensive Win Shares in the NBA")
+
+hist(data$`WS/48`, xlab = "Win Shares", main = "Histogram of Win Shares Per 48 min in the NBA")
+
+hist(data$OBPM, xlab = "Offensive Box +/-", main = "Histogram of Offensive Box +/-")
+
+hist(data$DBPM, xlab = "Defensive Box +/-", main = "Histogram of Defensive Box +/-")
+
+hist(data$BPM, xlab = "Box +/-", main = "Histogram of Box +/-")
+
+hist(data$VORP, xlab = "Value Over Replacement Player", main = "Histogram of VORP")
+```
